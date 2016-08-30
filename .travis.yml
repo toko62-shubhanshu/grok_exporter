@@ -44,7 +44,6 @@ install:
 
 script:
   - |
-    cd .. && mv grok_exporter_onig_test grok_exporter && cd grok_exporter ;
     if [[ "$TRAVIS_OS_NAME" == "osx" ]] ;
     then
         LDD_COMMAND="otool -L" ;
