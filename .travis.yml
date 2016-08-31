@@ -11,17 +11,17 @@ env:
   matrix:
     - ONIG_VERSION=5.9.6 MODE=STATIC
     - ONIG_VERSION=5.9.6 MODE=DYNAMIC
-    - ONIG_VERSION=6.1.0 MODE=STATIC
-    - ONIG_VERSION=6.1.0 MODE=DYNAMIC
     - ONIG_VERSION=DEFAULT
 
 before_install:
   - |
+    set -e ;
+    set -x ;
     case "$ONIG_VERSION" in
     "DEFAULT")
         if [[ "$TRAVIS_OS_NAME" == "osx" ]] ; then
             brew update ;
-            brew install oniguruma ;
+            brew install fstab/oniguruma/oniguruma-5.9.6 ;
         elif [[ "$TRAVIS_OS_NAME" == "linux" ]] ; then
             sudo apt-get -qq update ;
             sudo apt-get install libonig-dev ;
@@ -37,13 +37,18 @@ before_install:
         cd "${PROJ_DIR}" ;
         ;;
     esac ;
-    ls /usr/local/lib ;
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]] ;
+    then
+        sudo ldconfig ;
+    fi ;
 
 install:
   - echo "nothing to do in install phase" ;
 
 script:
   - |
+    set -e ;
+    set -x ;
     if [[ "$TRAVIS_OS_NAME" == "osx" ]] ;
     then
         LDD_COMMAND="otool -L" ;
@@ -63,7 +68,7 @@ script:
             echo "ERROR: Expected statically linked binary." >&2 ;
             exit -1 ;
         fi ;
-        ./integration-test.sh
+        ./integration-test.sh ;
         ;;
     *)
         go test -v $(go list ./... | grep -v /vendor/) ;
@@ -78,12 +83,15 @@ script:
 
 after_success:
   - |
-    if [[ "$TRAVIS_OS_NAME" == "linux" -a "$ONIG_VERSION" == "DEFAULT" ]] ;
+    set -e ;
+    set -x ;
+    if [[ "$TRAVIS_OS_NAME" == "linux" && "$ONIG_VERSION" == "DEFAULT" ]] ;
     then
         go get golang.org/x/tools/cmd/cover github.com/mattn/goveralls github.com/modocache/gover ;
-        go list ./... | grep -v /vendor/ | while read package ; do
+        go list ./... | grep -v /vendor/ | while read package ;
+        do
             go test -covermode count -coverprofile=$(basename $package).coverprofile $package ;
-            done ;
-        gover && goveralls -coverprofile=gover.coverprofile -service=travis-ci
+        done ;
+        gover && goveralls -coverprofile=gover.coverprofile -service=travis-ci ;
         rm *.coverprofile ;
-    fi
+    fi ;
