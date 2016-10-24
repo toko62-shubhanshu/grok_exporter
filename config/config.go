@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/fstab/grok_exporter/config/v1"
 	"github.com/fstab/grok_exporter/config/v2"
+	"github.com/fstab/grok_exporter/config/v3"
 	"io/ioutil"
 	"regexp"
 	"strconv"
@@ -26,7 +27,7 @@ import (
 
 // Example config: See ./example/config.yml
 
-func LoadConfigFile(filename string) (*v2.Config, string, error) {
+func LoadConfigFile(filename string) (*v3.Config, string, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, "", fmt.Errorf("Failed to load %v: %v", filename, err.Error())
@@ -38,7 +39,7 @@ func LoadConfigFile(filename string) (*v2.Config, string, error) {
 	return cfg, warn, nil
 }
 
-func LoadConfigString(content []byte) (*v2.Config, string, error) {
+func LoadConfigString(content []byte) (*v3.Config, string, error) {
 	version, warn, err := findVersion(string(content))
 	if err != nil {
 		return nil, warn, err
@@ -55,7 +56,16 @@ func findVersion(content string) (int, string, error) {
 		if err != nil {
 			return 0, "", fmt.Errorf("invalid 'global' configuration: '%v' is not a valid 'config_version'.", versionInfo[1])
 		}
-		return version, "", nil
+		if version == 3 {
+			return version, "", nil
+		}
+		if version == 2 || version == 1 {
+			warn := fmt.Sprintf("Config file version %v found. "+
+				"grok_exporter still supports 'config_version %v', but you should consider updating your configuration. "+
+				"Use the '-showconfig' command line option to view your configuration in the current format.", version, version)
+			return version, warn, nil
+		}
+		return version, "", fmt.Errorf("global.config_version %v is not supported.", version)
 	} else { // no version found
 		if strings.Contains(content, "prometheus_label") || !strings.Contains(content, "{{") {
 			warn := "No 'global.config_version' found in config file. " +
@@ -70,12 +80,14 @@ func findVersion(content string) (int, string, error) {
 	}
 }
 
-func unmarshal(content []byte, version int) (*v2.Config, error) {
+func unmarshal(content []byte, version int) (*v3.Config, error) {
 	switch version {
 	case 1:
 		return v1.Unmarshal(content)
 	case 2:
 		return v2.Unmarshal(content)
+	case 3:
+		return v3.Unmarshal(content)
 	default:
 		return nil, fmt.Errorf("global.config_version %v is not supported.", version)
 	}

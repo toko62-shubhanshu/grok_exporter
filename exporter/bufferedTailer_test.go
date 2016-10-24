@@ -16,6 +16,7 @@ package exporter
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"math/rand"
 	"sync"
 	"testing"
@@ -40,8 +41,10 @@ func (tail *sourceTailer) Close() {
 
 // First produce 10,000 lines, then consume 10,000 lines.
 func TestLineBufferSequential(t *testing.T) {
+	bufferLoadMetric := initBufferLoadMetric()
+	defer prometheus.Unregister(bufferLoadMetric)
 	src := &sourceTailer{lines: make(chan string)}
-	buffered := BufferedTailerWithMetrics(src)
+	buffered := BufferedTailerWithMetrics(src, "test.log", bufferLoadMetric)
 	for i := 0; i < 10000; i++ {
 		src.lines <- fmt.Sprintf("This is line number %v.", i)
 	}
@@ -64,8 +67,10 @@ func TestLineBufferSequential(t *testing.T) {
 
 // Produce and consume in parallel.
 func TestLineBufferParallel(t *testing.T) {
+	bufferLoadMetric := initBufferLoadMetric()
+	defer prometheus.Unregister(bufferLoadMetric)
 	src := &sourceTailer{lines: make(chan string)}
-	buffered := BufferedTailerWithMetrics(src)
+	buffered := BufferedTailerWithMetrics(src, "test.log", bufferLoadMetric)
 	var wg sync.WaitGroup
 	go func() {
 		start := time.Now()
@@ -103,4 +108,13 @@ func TestLineBufferParallel(t *testing.T) {
 	if stillOpen {
 		t.Error("Source tailer was not closed.")
 	}
+}
+
+func initBufferLoadMetric() *prometheus.SummaryVec {
+	bufferLoadMetric := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "grok_exporter_line_buffer_peak_load",
+		Help: "Number of lines that are read from the logfile and waiting to be processed. Peak value per second.",
+	}, []string{"input"})
+	prometheus.MustRegister(bufferLoadMetric)
+	return bufferLoadMetric
 }

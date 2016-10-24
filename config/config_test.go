@@ -21,11 +21,11 @@ import (
 
 const exampleConfig = `
 global:
-    config_version: 2
-input:
-    type: file
-    path: x/x/x
-    readall: true
+    config_version: 3
+inputs:
+    - type: file
+      path: x/x/x
+      readall: true
 grok:
     patterns_dir: b/c
 metrics:
@@ -39,23 +39,24 @@ server:
 `
 
 func TestVersionDetection(t *testing.T) {
-	expectVersion(t, exampleConfig, 2, false)
-	expectVersion(t, strings.Replace(exampleConfig, "config_version: 2", "config_version: 1", 1), 1, false)
-	expectVersion(t, strings.Replace(exampleConfig, "config_version: 2", "config_version:", 1), 1, true)
-	expectVersion(t, strings.Replace(exampleConfig, "config_version: 2", "", 1), 1, true)
-	_, _, err := findVersion(strings.Replace(exampleConfig, "config_version: 2", "config_version: a", 1))
-	if err == nil {
-		t.Fatalf("Expected error, because 'a' is not a number.")
-	}
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "config_version: 4", 1), 4, true, false)
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "config_version: 3", 1), 3, false, false)
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "config_version: 2", 1), 2, false, true)
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "config_version: 1", 1), 1, false, true)
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "", 1), 1, false, true)
+	expectVersion(t, strings.Replace(exampleConfig, "config_version: 3", "config_version: a", 1), 0, true, false)
 }
 
-func expectVersion(t *testing.T, config string, expectedVersion int, warningExpected bool) {
+func expectVersion(t *testing.T, config string, expectedVersion int, errorExpected bool, warningExpected bool) {
 	version, warn, err := findVersion(config)
-	if err != nil {
+	if errorExpected && err == nil {
+		t.Fatalf("didn't get error for config file version.")
+	}
+	if !errorExpected && err != nil {
 		t.Fatalf("unexpected error while getting version info: %v", err.Error())
 	}
 	if warningExpected && len(warn) == 0 {
-		t.Fatalf("didn't get warning for unversioned config file")
+		t.Fatalf("didn't get warning for config file version.")
 	}
 	if !warningExpected && len(warn) > 0 {
 		t.Fatalf("unexpected warning: %v", warn)

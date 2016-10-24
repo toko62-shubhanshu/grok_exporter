@@ -18,7 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fstab/grok_exporter/config"
-	"github.com/fstab/grok_exporter/config/v2"
+	"github.com/fstab/grok_exporter/config/v3"
 	"github.com/fstab/grok_exporter/exporter"
 	"github.com/fstab/grok_exporter/tailer"
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,6 +52,7 @@ func main() {
 	}
 	exitOnError(err)
 	if *showConfig {
+		cfg.ClearDefaults()
 		fmt.Printf("%v\n", cfg)
 		return
 	}
@@ -64,10 +65,15 @@ func main() {
 	for _, m := range metrics {
 		prometheus.MustRegister(m.Collector())
 	}
-	nLinesTotal, nMatchesByMetric, procTimeMicrosecondsByMetric, nErrorsByMetric := initSelfMonitoring(metrics)
+	nLinesTotal, nMatchesByMetric, procTimeMicrosecondsByMetric, nErrorsByMetric, bufferLoadMetric := initSelfMonitoring(cfg.Global.InputLabelName, cfg.Inputs, metrics)
 
-	tail, err := startTailer(cfg)
-	exitOnError(err)
+	tailers := make(map[string]tailer.Tailer)
+	for _, inputConfig := range *cfg.Inputs {
+		t, err := startTailer(inputConfig, bufferLoadMetric)
+		exitOnError(err)
+		tailers[inputConfig.InputLabelValue] = t
+	}
+	allTailers := exporter.RunMultipleFilesTailer(tailers)
 	fmt.Print(startMsg(cfg))
 	serverErrors := startServer(cfg, "/metrics", prometheus.Handler())
 
@@ -75,34 +81,34 @@ func main() {
 		select {
 		case err := <-serverErrors:
 			exitOnError(fmt.Errorf("Server error: %v", err.Error()))
-		case err := <-tail.Errors():
-			exitOnError(fmt.Errorf("Error reading log lines: %v", err.Error()))
-		case line := <-tail.Lines():
+		case err := <-allTailers.Errors():
+			exitOnError(fmt.Errorf("Error reading log lines from %v: %v", err.InputLabelValue, err.Error))
+		case line := <-allTailers.Lines():
 			matched := false
 			for _, metric := range metrics {
 				start := time.Now()
-				match, err := metric.Process(line)
+				match, err := metric.Process(line.InputLabelValue, line.Line)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "WARNING: Skipping log line: %v\n", err.Error())
-					fmt.Fprintf(os.Stderr, "%v\n", line)
-					nErrorsByMetric.WithLabelValues(metric.Name()).Inc()
+					fmt.Fprintf(os.Stderr, "%v\n", line.Line)
+					nErrorsByMetric.WithLabelValues(line.InputLabelValue, metric.Name()).Inc()
 				}
 				if match {
-					nMatchesByMetric.WithLabelValues(metric.Name()).Inc()
-					procTimeMicrosecondsByMetric.WithLabelValues(metric.Name()).Add(float64(time.Since(start).Nanoseconds() / int64(1000)))
+					nMatchesByMetric.WithLabelValues(line.InputLabelValue, metric.Name()).Inc()
+					procTimeMicrosecondsByMetric.WithLabelValues(line.InputLabelValue, metric.Name()).Add(float64(time.Since(start).Nanoseconds() / int64(1000)))
 					matched = true
 				}
 			}
 			if matched {
-				nLinesTotal.WithLabelValues(number_of_lines_matched_label).Inc()
+				nLinesTotal.WithLabelValues(line.InputLabelValue, number_of_lines_matched_label).Inc()
 			} else {
-				nLinesTotal.WithLabelValues(number_of_lines_ignored_label).Inc()
+				nLinesTotal.WithLabelValues(line.InputLabelValue, number_of_lines_ignored_label).Inc()
 			}
 		}
 	}
 }
 
-func startMsg(cfg *v2.Config) string {
+func startMsg(cfg *v3.Config) string {
 	host := "localhost"
 	if len(cfg.Server.Host) > 0 {
 		host = cfg.Server.Host
@@ -133,7 +139,7 @@ func validateCommandLineOrExit() {
 	}
 }
 
-func initPatterns(cfg *v2.Config) (*exporter.Patterns, error) {
+func initPatterns(cfg *v3.Config) (*exporter.Patterns, error) {
 	patterns := exporter.InitPatterns()
 	if len(cfg.Grok.PatternsDir) > 0 {
 		err := patterns.AddDir(cfg.Grok.PatternsDir)
@@ -150,7 +156,7 @@ func initPatterns(cfg *v2.Config) (*exporter.Patterns, error) {
 	return patterns, nil
 }
 
-func createMetrics(cfg *v2.Config, patterns *exporter.Patterns, libonig *exporter.OnigurumaLib) ([]exporter.Metric, error) {
+func createMetrics(cfg *v3.Config, patterns *exporter.Patterns, libonig *exporter.OnigurumaLib) ([]exporter.Metric, error) {
 	result := make([]exporter.Metric, 0, len(*cfg.Metrics))
 	for _, m := range *cfg.Metrics {
 		regex, err := exporter.Compile(m.Match, patterns, libonig)
@@ -163,13 +169,13 @@ func createMetrics(cfg *v2.Config, patterns *exporter.Patterns, libonig *exporte
 		}
 		switch m.Type {
 		case "counter":
-			result = append(result, exporter.NewCounterMetric(m, regex))
+			result = append(result, exporter.NewCounterMetric(cfg.Global.InputLabelName, m, regex))
 		case "gauge":
-			result = append(result, exporter.NewGaugeMetric(m, regex))
+			result = append(result, exporter.NewGaugeMetric(cfg.Global.InputLabelName, m, regex))
 		case "histogram":
-			result = append(result, exporter.NewHistogramMetric(m, regex))
+			result = append(result, exporter.NewHistogramMetric(cfg.Global.InputLabelName, m, regex))
 		case "summary":
-			result = append(result, exporter.NewSummaryMetric(m, regex))
+			result = append(result, exporter.NewSummaryMetric(cfg.Global.InputLabelName, m, regex))
 		default:
 			return nil, fmt.Errorf("Failed to initialize metrics: Metric type %v is not supported.", m.Type)
 		}
@@ -177,7 +183,7 @@ func createMetrics(cfg *v2.Config, patterns *exporter.Patterns, libonig *exporte
 	return result, nil
 }
 
-func initSelfMonitoring(metrics []exporter.Metric) (*prometheus.CounterVec, *prometheus.CounterVec, *prometheus.CounterVec, *prometheus.CounterVec) {
+func initSelfMonitoring(inputLabelName string, inputsCfg *v3.InputsConfig, metrics []exporter.Metric) (*prometheus.CounterVec, *prometheus.CounterVec, *prometheus.CounterVec, *prometheus.CounterVec, *prometheus.SummaryVec) {
 	buildInfo := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "grok_exporter_build_info",
 		Help: "A metric with a constant '1' value labeled by version, builddate, branch, revision, goversion, and platform on which grok_exporter was built.",
@@ -185,39 +191,47 @@ func initSelfMonitoring(metrics []exporter.Metric) (*prometheus.CounterVec, *pro
 	nLinesTotal := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "grok_exporter_lines_total",
 		Help: "Total number of log lines processed by grok_exporter.",
-	}, []string{"status"})
+	}, []string{inputLabelName, "status"})
 	nMatchesByMetric := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "grok_exporter_lines_matching_total",
 		Help: "Number of lines matched for each metric. Note that one line can be matched by multiple metrics.",
-	}, []string{"metric"})
+	}, []string{inputLabelName, "metric"})
 	procTimeMicrosecondsByMetric := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "grok_exporter_lines_processing_time_microseconds_total",
 		Help: "Processing time in microseconds for each metric. Divide by grok_exporter_lines_matching_total to get the averge processing time for one log line.",
-	}, []string{"metric"})
+	}, []string{inputLabelName, "metric"})
 	nErrorsByMetric := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "grok_exporter_line_processing_errors_total",
 		Help: "Number of errors for each metric. If this is > 0 there is an error in the configuration file. Check grok_exporter's console output.",
-	}, []string{"metric"})
+	}, []string{inputLabelName, "metric"})
+	bufferLoadMetric := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "grok_exporter_line_buffer_peak_load",
+		Help: "Number of lines that are read from the logfile and waiting to be processed. Peak value per second.",
+	}, []string{inputLabelName})
 
 	prometheus.MustRegister(buildInfo)
 	prometheus.MustRegister(nLinesTotal)
 	prometheus.MustRegister(nMatchesByMetric)
 	prometheus.MustRegister(procTimeMicrosecondsByMetric)
 	prometheus.MustRegister(nErrorsByMetric)
+	prometheus.MustRegister(bufferLoadMetric)
 
 	buildInfo.WithLabelValues(exporter.Version, exporter.BuildDate, exporter.Branch, exporter.Revision, exporter.GoVersion, exporter.Platform).Set(1)
 	// Initializing a value with zero makes the label appear. Otherwise the label is not shown until the first value is observed.
-	nLinesTotal.WithLabelValues(number_of_lines_matched_label).Add(0)
-	nLinesTotal.WithLabelValues(number_of_lines_ignored_label).Add(0)
-	for _, metric := range metrics {
-		nMatchesByMetric.WithLabelValues(metric.Name()).Add(0)
-		procTimeMicrosecondsByMetric.WithLabelValues(metric.Name()).Add(0)
-		nErrorsByMetric.WithLabelValues(metric.Name()).Add(0)
+	for _, inputCfg := range *inputsCfg {
+		nLinesTotal.WithLabelValues(inputCfg.InputLabelValue, number_of_lines_matched_label).Add(0)
+		nLinesTotal.WithLabelValues(inputCfg.InputLabelValue, number_of_lines_ignored_label).Add(0)
+		bufferLoadMetric.WithLabelValues(inputCfg.InputLabelValue)
+		for _, metric := range metrics {
+			nMatchesByMetric.WithLabelValues(inputCfg.InputLabelValue, metric.Name()).Add(0)
+			procTimeMicrosecondsByMetric.WithLabelValues(inputCfg.InputLabelValue, metric.Name()).Add(0)
+			nErrorsByMetric.WithLabelValues(inputCfg.InputLabelValue, metric.Name()).Add(0)
+		}
 	}
-	return nLinesTotal, nMatchesByMetric, procTimeMicrosecondsByMetric, nErrorsByMetric
+	return nLinesTotal, nMatchesByMetric, procTimeMicrosecondsByMetric, nErrorsByMetric, bufferLoadMetric
 }
 
-func startServer(cfg *v2.Config, path string, handler http.Handler) chan error {
+func startServer(cfg *v3.Config, path string, handler http.Handler) chan error {
 	serverErrors := make(chan error)
 	go func() {
 		switch {
@@ -237,15 +251,15 @@ func startServer(cfg *v2.Config, path string, handler http.Handler) chan error {
 	return serverErrors
 }
 
-func startTailer(cfg *v2.Config) (tailer.Tailer, error) {
+func startTailer(cfg *v3.InputConfig, bufferLoadMetric *prometheus.SummaryVec) (tailer.Tailer, error) {
 	var tail tailer.Tailer
 	switch {
-	case cfg.Input.Type == "file":
-		tail = tailer.RunFileTailer(cfg.Input.Path, cfg.Input.Readall, nil)
-	case cfg.Input.Type == "stdin":
+	case cfg.Type == "file":
+		tail = tailer.RunFileTailer(cfg.Path, cfg.Readall, nil)
+	case cfg.Type == "stdin":
 		tail = tailer.RunStdinTailer()
 	default:
-		return nil, fmt.Errorf("Config error: Input type '%v' unknown.", cfg.Input.Type)
+		return nil, fmt.Errorf("Config error: Input type '%v' unknown.", cfg.Type)
 	}
-	return exporter.BufferedTailerWithMetrics(tail), nil
+	return exporter.BufferedTailerWithMetrics(tail, cfg.InputLabelValue, bufferLoadMetric), nil
 }

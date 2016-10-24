@@ -16,7 +16,7 @@ package exporter
 
 import (
 	"fmt"
-	"github.com/fstab/grok_exporter/config/v2"
+	"github.com/fstab/grok_exporter/config/v3"
 	"regexp"
 	"strings"
 )
@@ -34,7 +34,7 @@ func Compile(pattern string, patterns *Patterns, libonig *OnigurumaLib) (*Onigur
 	return result, nil
 }
 
-func VerifyFieldNames(m *v2.MetricConfig, regex *OnigurumaRegexp) error {
+func VerifyFieldNames(m *v3.MetricConfig, regex *OnigurumaRegexp) error {
 	for _, template := range m.LabelTemplates {
 		for _, grokFieldName := range template.ReferencedGrokFields() {
 			if !regex.HasCaptureGroup(grokFieldName) {

@@ -17,26 +17,71 @@ package v1
 import (
 	"fmt"
 	"github.com/fstab/grok_exporter/config/v2"
+	"github.com/fstab/grok_exporter/config/v3"
 	"gopkg.in/yaml.v2"
 )
 
-func Unmarshal(config []byte) (*v2.Config, error) {
+func Unmarshal(config []byte) (*v3.Config, error) {
 	v1cfg := &Config{}
 	err := yaml.Unmarshal(config, v1cfg)
 	if err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v", err.Error())
 	}
-	v2cfg := &v2.Config{
-		Input:   v1cfg.Input,
-		Grok:    v1cfg.Grok,
-		Metrics: convertMetrics(*v1cfg.Metrics),
-		Server:  v1cfg.Server,
-	}
-	err = v2.AddDefaultsAndValidate(v2cfg)
+	v3cfg := v1cfg.ToV2().ToV3()
+	err = v3.AddDefaultsAndValidate(v3cfg)
 	if err != nil {
 		return nil, err
 	}
-	return v2cfg, nil
+	return v3cfg, nil
+}
+
+type Config struct {
+	// For sections that don't differ between v1 and v2, we reference v2 directly here.
+	Input   *InputConfig   `yaml:",omitempty"`
+	Grok    *GrokConfig    `yaml:",omitempty"`
+	Metrics *MetricsConfig `yaml:",omitempty"`
+	Server  *ServerConfig  `yaml:",omitempty"`
+}
+
+type InputConfig v2.InputConfig
+
+type GrokConfig v2.GrokConfig
+
+type MetricsConfig []*MetricConfig
+
+type MetricConfig struct {
+	Type       string              `yaml:",omitempty"`
+	Name       string              `yaml:",omitempty"`
+	Help       string              `yaml:",omitempty"`
+	Match      string              `yaml:",omitempty"`
+	Value      string              `yaml:",omitempty"`
+	Cumulative bool                `yaml:",omitempty"`
+	Buckets    []float64           `yaml:",flow,omitempty"`
+	Quantiles  map[float64]float64 `yaml:",flow,omitempty"`
+	Labels     []Label             `yaml:",omitempty"`
+}
+
+type Label struct {
+	GrokFieldName   string `yaml:"grok_field_name,omitempty"`
+	PrometheusLabel string `yaml:"prometheus_label,omitempty"`
+}
+
+type ServerConfig v2.ServerConfig
+
+func (v1cfg *Config) ToV2() *v2.Config {
+	return &v2.Config{
+		Global:  makeGlobalConfig(),
+		Input:   (*v2.InputConfig)(v1cfg.Input),
+		Grok:    (*v2.GrokConfig)(v1cfg.Grok),
+		Metrics: convertMetrics(*v1cfg.Metrics),
+		Server:  (*v2.ServerConfig)(v1cfg.Server),
+	}
+}
+
+func makeGlobalConfig() *v2.GlobalConfig {
+	return &v2.GlobalConfig{
+		ConfigVersion: 2,
+	}
 }
 
 func convertMetrics(v1metrics []*MetricConfig) *v2.MetricsConfig {
@@ -72,31 +117,4 @@ func makeTemplate(grokFieldName string) string {
 	} else {
 		return ""
 	}
-}
-
-type Config struct {
-	// For sections that don't differ between v1 and v2, we reference v2 directly here.
-	Input   *v2.InputConfig  `yaml:",omitempty"`
-	Grok    *v2.GrokConfig   `yaml:",omitempty"`
-	Metrics *MetricsConfig   `yaml:",omitempty"`
-	Server  *v2.ServerConfig `yaml:",omitempty"`
-}
-
-type MetricsConfig []*MetricConfig
-
-type MetricConfig struct {
-	Type       string              `yaml:",omitempty"`
-	Name       string              `yaml:",omitempty"`
-	Help       string              `yaml:",omitempty"`
-	Match      string              `yaml:",omitempty"`
-	Value      string              `yaml:",omitempty"`
-	Cumulative bool                `yaml:",omitempty"`
-	Buckets    []float64           `yaml:",flow,omitempty"`
-	Quantiles  map[float64]float64 `yaml:",flow,omitempty"`
-	Labels     []Label             `yaml:",omitempty"`
-}
-
-type Label struct {
-	GrokFieldName   string `yaml:"grok_field_name,omitempty"`
-	PrometheusLabel string `yaml:"prometheus_label,omitempty"`
 }

@@ -70,11 +70,13 @@ server:
 
 const expected = `
 global:
-    config_version: 2
-input:
-    type: file
-    path: x/x/x
-    readall: true
+    config_version: 3
+    input_label_name: input
+inputs:
+    - type: file
+      path: x/x/x
+      readall: true
+      input_label_value: x/x/x
 grok:
     patterns_dir: b/c
 metrics:

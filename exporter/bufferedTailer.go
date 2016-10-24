@@ -46,18 +46,13 @@ func (b *bufferedTailerWithMetrics) Close() {
 // and does not need to wait until the lines are processed.
 // The number of buffered lines are exposed as a Prometheus metric, if lines are constantly
 // produced faster than they are consumed, we will eventually run out of memory.
-func BufferedTailerWithMetrics(orig tailer.Tailer) tailer.Tailer {
+func BufferedTailerWithMetrics(orig tailer.Tailer, inputLabelValue string, bufferLoadMetric *prometheus.SummaryVec) tailer.Tailer {
 	buffer := list.New()
 	bufferSync := sync.NewCond(&sync.Mutex{}) // coordinate producer and consumer
 	out := make(chan string)
 
 	// producer
 	go func() {
-		bufferLoad := prometheus.NewSummary(prometheus.SummaryOpts{
-			Name: "grok_exporter_line_buffer_peak_load",
-			Help: "Number of lines that are read from the logfile and waiting to be processed. Peak value per second.",
-		})
-		prometheus.MustRegister(bufferLoad)
 		bufferLoadPeakValue := 0
 		tick := time.NewTicker(1 * time.Second)
 		for {
@@ -76,12 +71,11 @@ func BufferedTailerWithMetrics(orig tailer.Tailer) tailer.Tailer {
 					buffer = nil // make the consumer quit
 					bufferSync.Signal()
 					bufferSync.L.Unlock()
-					prometheus.Unregister(bufferLoad)
 					tick.Stop()
 					return
 				}
 			case <-tick.C:
-				bufferLoad.Observe(float64(bufferLoadPeakValue))
+				bufferLoadMetric.WithLabelValues(inputLabelValue).Observe(float64(bufferLoadPeakValue))
 				bufferLoadPeakValue = 0
 			}
 		}

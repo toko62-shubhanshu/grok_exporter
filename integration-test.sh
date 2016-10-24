@@ -111,69 +111,69 @@ function checkMetric() {
 
 echo "Checking metrics..."
 
-checkMetric 'grok_test_counter_nolabels' 3
-checkMetric 'grok_test_counter_labels{user="alice"}' 2
-checkMetric 'grok_test_counter_labels{user="bob"}' 1
+checkMetric "grok_test_counter_nolabels{input=\"$(cygpath -w $log_file)\"}" 3
+checkMetric "grok_test_counter_labels{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 2
+checkMetric "grok_test_counter_labels{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 1
 
-checkMetric 'grok_test_gauge_nolabels' 2.5
-checkMetric 'grok_test_gauge_labels{user="alice"}' 2.5
-checkMetric 'grok_test_gauge_labels{user="bob"}' 2.5
+checkMetric "grok_test_gauge_nolabels{input=\"$(cygpath -w $log_file)\"}" 2.5
+checkMetric "grok_test_gauge_labels{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 2.5
+checkMetric "grok_test_gauge_labels{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 2.5
 
-checkMetric 'grok_test_histogram_nolabels_bucket{le="1"}' 0
-checkMetric 'grok_test_histogram_nolabels_bucket{le="2"}' 1
-checkMetric 'grok_test_histogram_nolabels_bucket{le="3"}' 3
-checkMetric 'grok_test_histogram_nolabels_bucket{le="+Inf"}' 3
-checkMetric 'grok_test_histogram_nolabels_sum' 6.5
-checkMetric 'grok_test_histogram_nolabels_count' 3
+checkMetric "grok_test_histogram_nolabels_bucket{input=\"$(cygpath -w $log_file)\",le=\"1\"}" 0
+checkMetric "grok_test_histogram_nolabels_bucket{input=\"$(cygpath -w $log_file)\",le=\"2\"}" 1
+checkMetric "grok_test_histogram_nolabels_bucket{input=\"$(cygpath -w $log_file)\",le=\"3\"}" 3
+checkMetric "grok_test_histogram_nolabels_bucket{input=\"$(cygpath -w $log_file)\",le=\"+Inf\"}" 3
+checkMetric "grok_test_histogram_nolabels_sum{input=\"$(cygpath -w $log_file)\"}" 6.5
+checkMetric "grok_test_histogram_nolabels_count{input=\"$(cygpath -w $log_file)\"}" 3
 
-checkMetric 'grok_test_histogram_labels_bucket{user="alice",le="1"}' 0
-checkMetric 'grok_test_histogram_labels_bucket{user="alice",le="2"}' 1
-checkMetric 'grok_test_histogram_labels_bucket{user="alice",le="3"}' 2
-checkMetric 'grok_test_histogram_labels_bucket{user="alice",le="+Inf"}' 2
-checkMetric 'grok_test_histogram_labels_sum{user="alice"}' 4
-checkMetric 'grok_test_histogram_labels_count{user="alice"}' 2
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"alice\",le=\"1\"}" 0
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"alice\",le=\"2\"}" 1
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"alice\",le=\"3\"}" 2
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"alice\",le=\"+Inf\"}" 2
+checkMetric "grok_test_histogram_labels_sum{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 4
+checkMetric "grok_test_histogram_labels_count{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 2
 
-checkMetric 'grok_test_histogram_labels_bucket{user="bob",le="1"}' 0
-checkMetric 'grok_test_histogram_labels_bucket{user="bob",le="2"}' 0
-checkMetric 'grok_test_histogram_labels_bucket{user="bob",le="3"}' 1
-checkMetric 'grok_test_histogram_labels_bucket{user="bob",le="+Inf"}' 1
-checkMetric 'grok_test_histogram_labels_sum{user="bob"}' 2.5
-checkMetric 'grok_test_histogram_labels_count{user="bob"}' 1
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"bob\",le=\"1\"}" 0
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"bob\",le=\"2\"}" 0
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"bob\",le=\"3\"}" 1
+checkMetric "grok_test_histogram_labels_bucket{input=\"$(cygpath -w $log_file)\",user=\"bob\",le=\"+Inf\"}" 1
+checkMetric "grok_test_histogram_labels_sum{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 2.5
+checkMetric "grok_test_histogram_labels_count{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 1
 
-checkMetric 'grok_test_summary_nolabels{quantile="0.9"}' 2.5
-checkMetric 'grok_test_summary_nolabels_sum' 6.5
-checkMetric 'grok_test_summary_nolabels_count' 3
+checkMetric "grok_test_summary_nolabels{input=\"$(cygpath -w $log_file)\",quantile=\"0.9\"}" 2.5
+checkMetric "grok_test_summary_nolabels_sum{input=\"$(cygpath -w $log_file)\"}" 6.5
+checkMetric "grok_test_summary_nolabels_count{input=\"$(cygpath -w $log_file)\"}" 3
 
-checkMetric 'grok_test_summary_labels{user="alice",quantile="0.9"}' 2.5
-checkMetric 'grok_test_summary_labels_sum{user="alice"}' 4
-checkMetric 'grok_test_summary_labels_count{user="alice"}' 2
+checkMetric "grok_test_summary_labels{input=\"$(cygpath -w $log_file)\",user=\"alice\",quantile=\"0.9\"}" 2.5
+checkMetric "grok_test_summary_labels_sum{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 4
+checkMetric "grok_test_summary_labels_count{input=\"$(cygpath -w $log_file)\",user=\"alice\"}" 2
 
-checkMetric 'grok_test_summary_labels{user="bob",quantile="0.9"}' 2.5
-checkMetric 'grok_test_summary_labels_sum{user="bob"}' 2.5
-checkMetric 'grok_test_summary_labels_count{user="bob"}' 1
+checkMetric "grok_test_summary_labels{input=\"$(cygpath -w $log_file)\",user=\"bob\",quantile=\"0.9\"}" 2.5
+checkMetric "grok_test_summary_labels_sum{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 2.5
+checkMetric "grok_test_summary_labels_count{input=\"$(cygpath -w $log_file)\",user=\"bob\"}" 1
 
 # Check built-in metrics (except for processing time and buffer load):
 
-checkMetric 'grok_exporter_lines_total{status="ignored"}' 1
-checkMetric 'grok_exporter_lines_total{status="matched"}' 3
+checkMetric "grok_exporter_lines_total{input=\"$(cygpath -w $log_file)\",status=\"ignored\"}" 1
+checkMetric "grok_exporter_lines_total{input=\"$(cygpath -w $log_file)\",status=\"matched\"}" 3
 
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_counter_labels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_counter_nolabels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_gauge_labels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_gauge_nolabels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_histogram_labels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_histogram_nolabels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_summary_labels"}' 3
-checkMetric 'grok_exporter_lines_matching_total{metric="grok_test_summary_nolabels"}' 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_counter_labels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_counter_nolabels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_gauge_labels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_gauge_nolabels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_histogram_labels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_histogram_nolabels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_summary_labels\"}" 3
+checkMetric "grok_exporter_lines_matching_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_summary_nolabels\"}" 3
 
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_counter_labels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_counter_nolabels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_gauge_labels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_gauge_nolabels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_histogram_labels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_histogram_nolabels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_summary_labels"}' 0
-checkMetric 'grok_exporter_line_processing_errors_total{metric="grok_test_summary_nolabels"}' 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_counter_labels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_counter_nolabels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_gauge_labels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_gauge_nolabels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_histogram_labels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_histogram_nolabels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_summary_labels\"}" 0
+checkMetric "grok_exporter_line_processing_errors_total{input=\"$(cygpath -w $log_file)\",metric=\"grok_test_summary_nolabels\"}" 0
 
 rm $log_file
 echo '30.07.2016 14:45:59 alice 2.5' >> $log_file
@@ -181,6 +181,6 @@ echo '30.07.2016 14:45:59 alice 2.5' >> $log_file
 sleep 0.1
 echo "Checking metrics..."
 
-checkMetric 'grok_test_counter_nolabels' 4
+checkMetric "grok_test_counter_nolabels{input=\"$(cygpath -w $log_file)\"}" 4
 
 echo SUCCESS

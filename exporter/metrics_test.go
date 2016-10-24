@@ -15,61 +15,61 @@
 package exporter
 
 import (
-	"github.com/fstab/grok_exporter/config/v2"
+	"github.com/fstab/grok_exporter/config/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_model/go"
 	"reflect"
 	"testing"
 )
 
-func TestCounterVec(t *testing.T) {
+func TestCounter(t *testing.T) {
 	regex := initCounterRegex(t)
-	counterCfg := newMetricConfig(t, &v2.MetricConfig{
+	counterCfg := newMetricConfig(t, &v3.MetricConfig{
 		Name: "exim_rejected_rcpt_total",
-		Labels: map[string]string{
-			"error_message": "{{.message}}",
-		},
 	})
-	counter := NewCounterMetric(counterCfg, regex)
-	counter.Process("some unrelated line")
-	counter.Process("2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
-	counter.Process("2016-04-26 12:31:39 H=(186-90-8-31.genericrev.cantv.net) [186.90.8.31] F=<Hans.Krause9@cantv.net> rejected RCPT <ug2seeng-admin@example.com>: Unrouteable address")
-	counter.Process("2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
+	counter := NewCounterMetric("input", counterCfg, regex)
+
+	counter.Process("/var/log/file.log", "some unrelated line")
+	counter.Process("/var/log/file.log", "2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
+	counter.Process("/var/log/file.log", "2016-04-26 12:31:39 H=(186-90-8-31.genericrev.cantv.net) [186.90.8.31] F=<Hans.Krause9@cantv.net> rejected RCPT <ug2seeng-admin@example.com>: Unrouteable address")
+	counter.Process("/var/log/file.log", "2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
 
 	switch c := counter.Collector().(type) {
 	case *prometheus.CounterVec:
 		m := io_prometheus_client.Metric{}
-		c.WithLabelValues("relay not permitted").Write(&m)
-		if *m.Counter.Value != float64(2) {
-			t.Errorf("Expected 2 matches, but got %v matches.", *m.Counter.Value)
-		}
-		c.WithLabelValues("Unrouteable address").Write(&m)
-		if *m.Counter.Value != float64(1) {
-			t.Errorf("Expected 1 match, but got %v matches.", *m.Counter.Value)
+		c.WithLabelValues("/var/log/file.log").Write(&m)
+		if *m.Counter.Value != float64(3) {
+			t.Errorf("Expected 3 matches, but got %v matches.", *m.Counter.Value)
 		}
 	default:
 		t.Errorf("Unexpected type of metric: %v", reflect.TypeOf(c))
 	}
 }
 
-func TestCounter(t *testing.T) {
+func TestCounterWithLabels(t *testing.T) {
 	regex := initCounterRegex(t)
-	counterCfg := newMetricConfig(t, &v2.MetricConfig{
+	counterCfg := newMetricConfig(t, &v3.MetricConfig{
 		Name: "exim_rejected_rcpt_total",
+		Labels: map[string]string{
+			"error_message": "{{.message}}",
+		},
 	})
-	counter := NewCounterMetric(counterCfg, regex)
-
-	counter.Process("some unrelated line")
-	counter.Process("2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
-	counter.Process("2016-04-26 12:31:39 H=(186-90-8-31.genericrev.cantv.net) [186.90.8.31] F=<Hans.Krause9@cantv.net> rejected RCPT <ug2seeng-admin@example.com>: Unrouteable address")
-	counter.Process("2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
+	counter := NewCounterMetric("input", counterCfg, regex)
+	counter.Process("/var/log/file.log", "some unrelated line")
+	counter.Process("/var/log/file.log", "2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
+	counter.Process("/var/log/file.log", "2016-04-26 12:31:39 H=(186-90-8-31.genericrev.cantv.net) [186.90.8.31] F=<Hans.Krause9@cantv.net> rejected RCPT <ug2seeng-admin@example.com>: Unrouteable address")
+	counter.Process("/var/log/file.log", "2016-04-26 10:19:57 H=(85.214.241.101) [36.224.138.227] F=<z2007tw@yahoo.com.tw> rejected RCPT <alan.a168@msa.hinet.net>: relay not permitted")
 
 	switch c := counter.Collector().(type) {
-	case prometheus.Counter:
+	case *prometheus.CounterVec:
 		m := io_prometheus_client.Metric{}
-		c.Write(&m)
-		if *m.Counter.Value != float64(3) {
-			t.Errorf("Expected 3 matches, but got %v matches.", *m.Counter.Value)
+		c.WithLabelValues("/var/log/file.log", "relay not permitted").Write(&m)
+		if *m.Counter.Value != float64(2) {
+			t.Errorf("Expected 2 matches, but got %v matches.", *m.Counter.Value)
+		}
+		c.WithLabelValues("/var/log/file.log", "Unrouteable address").Write(&m)
+		if *m.Counter.Value != float64(1) {
+			t.Errorf("Expected 1 match, but got %v matches.", *m.Counter.Value)
 		}
 	default:
 		t.Errorf("Unexpected type of metric: %v", reflect.TypeOf(c))
@@ -95,19 +95,19 @@ func initCounterRegex(t *testing.T) *OnigurumaRegexp {
 
 func TestGauge(t *testing.T) {
 	regex := initGaugeRegex(t)
-	gaugeCfg := newMetricConfig(t, &v2.MetricConfig{
+	gaugeCfg := newMetricConfig(t, &v3.MetricConfig{
 		Name:  "temperature",
 		Value: "{{.temperature}}",
 	})
-	gauge := NewGaugeMetric(gaugeCfg, regex)
+	gauge := NewGaugeMetric("input", gaugeCfg, regex)
 
-	gauge.Process("Temperature in Berlin: 32")
-	gauge.Process("Temperature in Moscow: -5")
+	gauge.Process("/var/log/file.log", "Temperature in Berlin: 32")
+	gauge.Process("/var/log/file.log", "Temperature in Moscow: -5")
 
 	switch c := gauge.Collector().(type) {
-	case prometheus.Gauge:
+	case *prometheus.GaugeVec:
 		m := io_prometheus_client.Metric{}
-		c.Write(&m)
+		c.WithLabelValues("/var/log/file.log").Write(&m)
 		if *m.Gauge.Value != float64(-5) {
 			t.Errorf("Expected -5 as last observed value, but got %v.", *m.Gauge.Value)
 		}
@@ -118,20 +118,20 @@ func TestGauge(t *testing.T) {
 
 func TestGaugeCumulative(t *testing.T) {
 	regex := initGaugeRegex(t)
-	gaugeCfg := newMetricConfig(t, &v2.MetricConfig{
+	gaugeCfg := newMetricConfig(t, &v3.MetricConfig{
 		Name:       "temperature",
 		Value:      "{{.temperature}}",
 		Cumulative: true,
 	})
-	gauge := NewGaugeMetric(gaugeCfg, regex)
+	gauge := NewGaugeMetric("input", gaugeCfg, regex)
 
-	gauge.Process("Temperature in Berlin: 32")
-	gauge.Process("Temperature in Moscow: -5")
+	gauge.Process("/var/log/file.log", "Temperature in Berlin: 32")
+	gauge.Process("/var/log/file.log", "Temperature in Moscow: -5")
 
 	switch c := gauge.Collector().(type) {
-	case prometheus.Gauge:
+	case *prometheus.GaugeVec:
 		m := io_prometheus_client.Metric{}
-		c.Write(&m)
+		c.WithLabelValues("/var/log/file.log").Write(&m)
 		if *m.Gauge.Value != float64(27) {
 			t.Errorf("Expected 27 as cumulative value, but got %v.", *m.Gauge.Value)
 		}
@@ -142,27 +142,27 @@ func TestGaugeCumulative(t *testing.T) {
 
 func TestGaugeVec(t *testing.T) {
 	regex := initGaugeRegex(t)
-	gaugeCfg := newMetricConfig(t, &v2.MetricConfig{
+	gaugeCfg := newMetricConfig(t, &v3.MetricConfig{
 		Name:  "temperature",
 		Value: "{{.temperature}}",
 		Labels: map[string]string{
 			"city": "{{.city}}",
 		},
 	})
-	gauge := NewGaugeMetric(gaugeCfg, regex)
+	gauge := NewGaugeMetric("input", gaugeCfg, regex)
 
-	gauge.Process("Temperature in Berlin: 32")
-	gauge.Process("Temperature in Moscow: -5")
-	gauge.Process("Temperature in Berlin: 31")
+	gauge.Process("/var/log/file.log", "Temperature in Berlin: 32")
+	gauge.Process("/var/log/file.log", "Temperature in Moscow: -5")
+	gauge.Process("/var/log/file.log", "Temperature in Berlin: 31")
 
 	switch c := gauge.Collector().(type) {
 	case *prometheus.GaugeVec:
 		m := io_prometheus_client.Metric{}
-		c.WithLabelValues("Berlin").Write(&m)
+		c.WithLabelValues("/var/log/file.log", "Berlin").Write(&m)
 		if *m.Gauge.Value != float64(31) {
 			t.Errorf("Expected 31 as last observed value in Berlin, but got %v.", *m.Gauge.Value)
 		}
-		c.WithLabelValues("Moscow").Write(&m)
+		c.WithLabelValues("/var/log/file.log", "Moscow").Write(&m)
 		if *m.Gauge.Value != float64(-5) {
 			t.Errorf("Expected -5 as last observed value in Moscow, but got %v.", *m.Gauge.Value)
 		}
@@ -184,7 +184,7 @@ func initGaugeRegex(t *testing.T) *OnigurumaRegexp {
 	return regex
 }
 
-func newMetricConfig(t *testing.T, cfg *v2.MetricConfig) *v2.MetricConfig {
+func newMetricConfig(t *testing.T, cfg *v3.MetricConfig) *v3.MetricConfig {
 	err := cfg.InitTemplates()
 	if err != nil {
 		t.Fatal(err)

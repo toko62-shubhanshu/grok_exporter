@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-const counter_config = `
+const v2cfg = `
 global:
     config_version: 2
 input:
@@ -31,164 +31,96 @@ grok:
 metrics:
     - type: counter
       name: test_count_total
-      help: Dummy help message.
+      help: Dummy help message for counter.
       match: Some text here, then a %{DATE}.
       labels:
-          label_a: '{{.some_grok_field_a}}'
-          label_b: '{{.some_grok_field_b}}'
+        prom_label_a: '{{.grok_field_a}}'
+        prom_label_b: '{{.grok_field_b}}'
+    - type: gauge
+      name: test_gauge
+      help: Dummy help message for gauge.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
+      value: '{{.val}}'
+      cumulative: true
+      labels:
+        user: '{{.user}}'
+    - type: histogram
+      name: test_histogram
+      help: Dummy help message for histogram.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
+      value: '{{.val}}'
+      buckets: [1, 2, 3]
+      labels:
+        user: '{{.user}}'
+    - type: summary
+      name: test_summary
+      help: Dummy help message for summary.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
+      value: '{{.val}}'
+      quantiles: {0.5: 0.05, 0.9: 0.01, 0.99: 0.001}
+      labels:
+        user: '{{.user}}'
 server:
     protocol: https
     port: 1111
 `
 
-const gauge_config = `
+const expected = `
 global:
-    config_version: 2
-input:
-    type: stdin
+    config_version: 3
+    input_label_name: input
+inputs:
+    - type: file
+      path: x/x/x
+      readall: true
+      input_label_value: x/x/x
 grok:
     patterns_dir: b/c
 metrics:
+    - type: counter
+      name: test_count_total
+      help: Dummy help message for counter.
+      match: Some text here, then a %{DATE}.
+      labels:
+        prom_label_a: '{{.grok_field_a}}'
+        prom_label_b: '{{.grok_field_b}}'
     - type: gauge
-      name: test_histogram
-      help: Dummy help message.
-      match: Some %{NUMBER:val} here, then a %{DATE}.
+      name: test_gauge
+      help: Dummy help message for gauge.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
       value: '{{.val}}'
       cumulative: true
-server:
-    protocol: http
-    host: localhost
-    port: 9144
-`
-
-const histogram_config = `
-global:
-    config_version: 2
-input:
-    type: stdin
-grok:
-    patterns_dir: b/c
-metrics:
+      labels:
+        user: '{{.user}}'
     - type: histogram
       name: test_histogram
-      help: Dummy help message.
-      match: Some %{NUMBER:val} here, then a %{DATE}.
+      help: Dummy help message for histogram.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
       value: '{{.val}}'
-      buckets: $BUCKETS
-server:
-    protocol: http
-    port: 9144
-`
-
-const summary_config = `
-global:
-    config_version: 2
-input:
-    type: stdin
-grok:
-    patterns_dir: b/c
-metrics:
+      buckets: [1, 2, 3]
+      labels:
+        user: '{{.user}}'
     - type: summary
       name: test_summary
-      help: Dummy help message.
-      match: Some %{NUMBER:val} here, then a %{DATE}.
+      help: Dummy help message for summary.
+      match: '%{DATE} %{TIME} %{USER:user} %{NUMBER:val}'
       value: '{{.val}}'
-      quantiles: $QUANTILES
+      quantiles: {0.5: 0.05, 0.9: 0.01, 0.99: 0.001}
+      labels:
+        user: '{{.user}}'
 server:
-    protocol: http
-    port: 9144
+    protocol: https
+    port: 1111
 `
 
-func TestCounterValidConfig(t *testing.T) {
-	loadOrFail(t, counter_config)
-}
-
-func TestGaugeValidConfig(t *testing.T) {
-	loadOrFail(t, gauge_config)
-}
-
-func TestGaugeInvalidConfig(t *testing.T) {
-	invalidCfg := strings.Replace(gauge_config, "      value: '{{.val}}'\n", "", 1)
-	_, err := Unmarshal([]byte(invalidCfg))
-	if err == nil || !strings.Contains(err.Error(), "'metrics.value' must not be empty") {
-		t.Fatal("Expected error message saying that value is missing.")
-	}
-}
-
-func TestGaugeCumulativeConfig(t *testing.T) {
-	cfg := loadOrFail(t, gauge_config)
-	if (*cfg.Metrics)[0].Cumulative != true {
-		t.Fatal("Expected 'true' as gauge cumulative option.")
-	}
-}
-
-func TestGaugeDefaultCumulativeConfig(t *testing.T) {
-	cfgString := strings.Replace(gauge_config, "      cumulative: true\n", "", 1)
-	cfg := loadOrFail(t, cfgString)
-	if (*cfg.Metrics)[0].Cumulative != false {
-		t.Fatal("Expected 'false' as default for gauge cumulative option.")
-	}
-}
-
-func TestGaugeInvalidCumulativeConfig(t *testing.T) {
-	invalidCfg := strings.Replace(gauge_config, "      cumulative: true\n", "      cumulative: dontknow\n", 1)
-	_, err := Unmarshal([]byte(invalidCfg))
-	if err == nil || !strings.Contains(err.Error(), "dontknow") {
-		t.Fatal("Expected error message saying that 'dontknow' is invalid.", err)
-	}
-}
-
-func TestHistogramValidConfig(t *testing.T) {
-	validCfg := strings.Replace(histogram_config, "$BUCKETS", "[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]", 1)
-	cfg := loadOrFail(t, validCfg)
-	metric := (*(cfg.Metrics))[0]
-	if len(metric.Buckets) != 11 || metric.Buckets[0] != 0.005 || metric.Buckets[10] != 10 {
-		t.Fatalf("Error parsing bucket list: Got %v", metric.Buckets)
-	}
-}
-
-func TestHistogramInvalidConfig(t *testing.T) {
-	invalidCfg := strings.Replace(histogram_config, "$BUCKETS", "[0.005, oops, 10]", 1)
-	_, err := Unmarshal([]byte(invalidCfg))
-	if err == nil || !strings.Contains(err.Error(), "oops") {
-		t.Fatal("Expected error saying that 'oops' is not a valid number.")
-	}
-}
-
-func TestSummaryValidConfig(t *testing.T) {
-	validCfg := strings.Replace(summary_config, "$QUANTILES", "{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}", 1)
-	cfg := loadOrFail(t, validCfg)
-	metric := (*(cfg.Metrics))[0]
-	if len(metric.Quantiles) != 3 || metric.Quantiles[0.5] != 0.05 || metric.Quantiles[0.99] != 0.001 {
-		t.Fatalf("Error parsing bucket list: Got %v", metric.Buckets)
-	}
-}
-
-func TestSummaryInvalidConfig(t *testing.T) {
-	invalidCfg := strings.Replace(summary_config, "$QUANTILES", "[0.005, 0.2, 10]", 1)
-	_, err := Unmarshal([]byte(invalidCfg))
-	if err == nil {
-		t.Fatal("Expected error, because quantiles are a list and not a map.")
-	}
-}
-
-func TestValueInvalidTemplate(t *testing.T) {
-	invalidCfg := strings.Replace(gauge_config, "value: '{{.val}}'", "value: '{{val}}'", 1)
-	_, err := Unmarshal([]byte(invalidCfg))
-	if err == nil {
-		t.Fatal("Expected error, because using {{val}} instead of {{.val}}.")
-	}
-}
-
-func loadOrFail(t *testing.T, cfgString string) *Config {
-	cfg, err := Unmarshal([]byte(cfgString))
+func TestImportV2(t *testing.T) {
+	cfg, err := Unmarshal([]byte(v2cfg))
 	if err != nil {
 		t.Fatalf("Failed to read config: %v", err.Error())
 	}
-	if !equalsIgnoreIndentation(cfg.String(), cfgString) {
-		t.Fatalf("Expected:\n%v\nActual:\n%v\n", cfgString, cfg)
+	if !equalsIgnoreIndentation(cfg.String(), expected) {
+		t.Fatalf("Expected:\n%v\nActual:\n%v\n", expected, cfg)
 	}
-	return cfg
 }
 
 func equalsIgnoreIndentation(a string, b string) bool {
